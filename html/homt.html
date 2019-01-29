@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>光华精英</title>
+    <script src="//vuejs.org/js/vue.min.js"></script>
+    <!-- import stylesheet -->
+    <link rel="stylesheet" href="//unpkg.com/iview/dist/styles/iview.css">
+    <!-- import iView -->
+    <script src="//unpkg.com/iview/dist/iview.min.js"></script>
+</head>
+<div id="app">
+
+</div>
+<script>
+    var ws;
+    var roomId = #{roomId};
+    var pageData={
+        ver:-1,
+        message:'',
+        readyA:false,
+        readyB:false,
+        edited:false,
+        pushing:false,
+        count:0
+    }
+    function connect() {
+        ws = new WebSocket('ws://localhost:8099/server/'+roomId);
+        ws.onopen=function (e){
+            console.log(e);
+        };
+        ws.onmessage=function (ev) {
+            if(ev.data[0]=='i'){
+                pageData.readyB = true;
+                var id = ev.data.indexOf(',');
+                pageData.ver = ev.data.substr(1,id-1)*1;
+                vue.newest = ev.data.substr(id+1);
+                vue.message = vue.newest;
+                vue.ver = pageData.ver;
+                pageData.ready=true;
+                doInit();
+            }
+            else if(ev.data[0]=='o'){
+                pageData.pushing=false;
+                vue.ver = ev.data.substr(1)*1;
+                if(pageData.ver<vue.ver){
+                    pageData.ver=vue.ver;
+                    vue.hasConflict = false;
+                    vue.modalShow=false;
+                }
+                sync();
+            }
+            else if(ev.data[0]=='c'){
+                vue.count = ev.data.substr(1)*1;
+            }
+            else if(ev.data[0]=='m'){
+                var id = ev.data.indexOf(',');
+                var ver = ev.data.substr(1,id-1)*1;
+                if(pageData.ver < ver){
+                    pageData.ver = ver;
+                    vue.newest = ev.data.substr(id+1);
+                    console.log(pageData.edited);
+                    console.log(pageData.pushing);
+                    if(pageData.edited==false&&pageData.pushing==false) {
+                        console.log('hh');
+                        console.log(vue.newest);
+                        vue.message = vue.newest;
+                        vue.ver=pageData.ver;
+                        vue.changeData(vue.newest);
+                    }
+                    else{
+                        vue.hasConflict = true;
+                    }
+                }
+            }
+            console.log(ev)
+        }
+        ws.onclose=function (ev) {
+            //       window.href.refresh();
+        }
+        ws.onerror=function (ev) {
+            //      window.href.refresh();
+        }
+    }
+    function sync(){
+        if(pageData.pushing==true){
+            return;
+        }
+        if(pageData.edited==false){
+            return;
+        }
+        if(pageData.ver>vue.ver){
+            return;
+        }
+        timeOut = setTimeout(function () {
+            pageData.edited = false;
+            pageData.pushing = true;
+            ws.send("" + vue.ver + "," + ele.innerHTML);
+            timeOut = null;
+        }, 300)
+    }
+    var dom;
+    var ele;
+    var vue;
+    var timeOut=null;
+    vue = new Vue({
+        el:'#app',
+        data:{
+            modalShow:false,
+            foreGround:'#000000',
+            size:3,
+            backgroundColor:'rgba(0,0,0,0)',
+            readyhh:false,
+            ver:0,
+            count:0,
+            message:'',
+            newest:'',
+            edited:false,
+            hasConflict:false
+        },
+        methods:{
+            merge:function(){
+                vue.modalShow=false;
+                vue.hasConflict = false;
+                var dmp = new diff_match_patch();
+                var diff = dmp.diff_main(vue.newest, vue.message);
+                dmp.diff_cleanupSemantic(diff);
+                var s = "";
+                for(var i in diff){
+                    s+=diff[i][1];
+                }
+                vue.message = s;
+                vue.newest = s;
+                vue.ver = pageData.ver;
+                pageData.edited = true;
+                vue.changeData(vue.message)
+                if(timeOut==null) {
+                    timeOut = setTimeout(function () {
+                        pageData.edited = false;
+                        pageData.pushing = true;
+                        ws.send("" + vue.ver + "," + ele.innerHTML);
+                        timeOut = null;
+                    }, 300)
+                }
+            },
+            useNewest:function(){
+                vue.modalShow=false;
+                pageData.edited = false;
+                pageData.pushing=false;
+                vue.hasConflict = false;
+                vue.ver = pageData.ver;
+                vue.message = vue.newest;
+                vue.changeData(vue.message);
+            },
+            watch:function(){
+                vue.modalShow = true;
+            },
+            changeData:function(s){
+                ele.innerHTML = s;
+            },
+            onUpload:function(response,a,b){
+                if(response.ok==true) {
+                    if(response.isImage == true){
+                        dom.execCommand("insertImage", false,"/getAttach?fileName="+ response.filename);
+                    }
+                    else{
+                        dom.execCommand("insertHTML",false,"<a href='/getAttach?fileName="+response.filename+"'>"+response.realname+"</a>");
+                    }
+                }
+                else{
+                    alert('上传失败');
+                }
+                ele.focus();
+            },
+            onColorChange:function() {
+                dom.execCommand("foreColor",false,vue.foreGround);
+                setTimeout(function () {
+                    ele.focus();
+                },1);
+
+            },
+            onBackChange:function(){
+                dom.execCommand("backColor",false,vue.backgroundColor);
+                setTimeout(function () {
+                    ele.focus();
+                },1);
+            },
+            click:function () {
+                console.log(1);
+                dom.execCommand("FontSize",false,vue.size)
+            },
+            alignLeft:function () {
+                dom.execCommand("justifyLeft",false,null);
+                ele.focus();
+            },
+            alignCenter:function () {
+                dom.execCommand("justifyCenter",false,null);
+                ele.focus();
+            },
+            alignRight:function () {
+                dom.execCommand("justifyRight",false,null);
+                ele.focus();
+            },
+            bold:function () {
+                dom.execCommand("bold",false,null);
+                ele.focus();
+            },
+            italic:function () {
+                dom.execCommand("italic",false,null);
+                ele.focus();
+            },
+            underline:function () {
+                dom.execCommand("underline",false,null)
+                ele.focus();
+            },
+            strikeThrough:function () {
+                dom.execCommand("strikeThrough",false,null)
+                ele.focus();
+            },
+            insertAttach:function () {
+
+            }
+        },
+        mounted:function () {
+            connect();
+
+        }
+    })
+
+    function doInit() {
+        if(pageData.readyA&&pageData.readyB) {
+            vue.changeData(vue.message);
+            ele.focus();
+            ele.oninput=function (ev) {
+                vue.message = ele.innerHTML;
+                pageData.edited=true;
+                if(timeOut==null) {
+                    timeOut = setTimeout(function () {
+                        pageData.edited = false;
+                        pageData.pushing = true;
+                        ws.send("" + vue.ver + "," + ele.innerHTML);
+                        timeOut = null;
+                    }, 300)
+                }
+            }
+        }
+    }
+
+    function onEditorReady() {
+
+        dom = document.getElementById("frame0").contentDocument;
+        ele = dom.getElementById("hh");
+        pageData.readyA = true;
+        doInit();
+    }
+
+    function createEditor(setting) {
+        setting.el.style.position = "relative";
+        setting.el.appendChild();
+    }
+
+    function hh() {
+        document.execCommand("foreColor",false,"#f0f000");
+        console.log("hh");
+    }
+</script>
+</body>
+</html>
